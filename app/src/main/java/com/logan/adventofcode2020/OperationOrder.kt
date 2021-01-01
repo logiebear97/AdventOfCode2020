@@ -1,124 +1,107 @@
 package com.logan.adventofcode2020
 
+import android.icu.number.NumberFormatter
 import java.io.File
-import kotlin.math.exp
+import java.text.NumberFormat
+import java.util.ArrayDeque
 
-var expressions = mutableListOf<TreeNode<Char>>()
+typealias Tokens = ArrayDeque<Char>
 
-class TreeNode<T>(var value: T) {
-    var parent: TreeNode<T>? = null
-
-    var left: TreeNode<T>? = null
-    var right: TreeNode<T>? = null
-}
+var expressionTokens = mutableListOf<Tokens>()
+var values = mutableMapOf<Tokens, Long>()
 
 fun main() {
     val inputFileName = "input/day18_input.txt"
     readMathExpressionsFromFile(inputFileName)
 
-//    expressions.forEach { println("${evaluateExpression(it)}") }
+    var sum = 0L
+    expressionTokens.forEach {
+        values[it] = evaluate(it.clone())
+        sum += values[it]!!
+    }
+
+    println(sum.toBigDecimal().toPlainString())
+
+    sum = 0L
+    expressionTokens.forEach {
+        values[it] = advancedEvaluate(it.clone())
+        sum += values[it]!!
+    }
+
+    println(sum.toBigDecimal().toPlainString())
 
 }
 
 fun readMathExpressionsFromFile(name: String) {
     val lines = File(name).readLines()
 
-    lines.forEach { convertExpressionToTree(it) }
+    lines.forEach {
+        expressionTokens.add(tokenize(it))
+    }
 }
 
-fun convertExpressionToTree(expression: String) {
-    var expTree = mutableListOf<TreeNode<Char>>()
-    var charStack = mutableListOf<Char>()
-
-    var t: TreeNode<Char> = TreeNode(' ')
-    var t1: TreeNode<Char>
-    var t2: TreeNode<Char>
-
-    expression.forEach {
-        when {
-            it == '(' -> {
-                charStack.add(it)
-            }
-            it.isDigit() -> {
-                t = TreeNode(it)
-                expTree.add(t)
-            }
-            it == ')' -> {
-                while (charStack.isNotEmpty() && charStack.last() != '(') {
-                    t = TreeNode(charStack.last())
-                    charStack.removeLast()
-
-                    t1 = expTree.last()
-                    expTree.removeLast()
-
-                    t2 = expTree.last()
-                    expTree.removeLast()
-
-                    t.left = t2
-                    t.right = t1
-                    expTree.add(t)
-                }
-
-                charStack.add(it)
-
-            }
-            else -> {
-                while (charStack.isNotEmpty() && charStack.last() != '(' && it != ' ') {
-                    t = TreeNode(charStack.last())
-                    charStack.removeLast()
-
-                    t1 = expTree.last()
-                    expTree.removeLast()
-
-                    t2 = expTree.last()
-                    expTree.removeLast()
-
-                    t.left = t2
-                    t.right = t1
-
-                    expTree.add(t)
-                }
-
-                charStack.add(it)
-            }
-        }
+fun tokenize(expression: String): Tokens {
+    var result = """\d+|[+*()]""".toRegex().findAll(expression)
+    var tokens = Tokens()
+    result.forEach {
+        tokens.add(it.value[0])
     }
-
-    expressions.add(t)
+    return tokens
 }
 
-fun evaluateExpression(exp: String): Int {
-    var lhs = 0
-    var rhs = 0
+fun evaluate(tokens: Tokens): Long {
+    var acc = 0L
+    var op = 'a'
 
-    if (exp.contains('(')) {
-        rhs = evaluateExpression(exp.substringAfter('('))
-    }
-    val ops = exp.split(' ')
-
-    for (i in ops.indices) {
-//        if (ops[i].contains('(')) {
-////            val levels = ops[i].length
-//            val lastClose = exp.substringAfter(ops[i])
-//            rhs = evaluateExpression(lastClose)
-//        }
-        if (ops[i].contains(')')) {
-            return lhs
-        }
+    while (tokens.isNotEmpty()) {
+        var t = tokens.removeFirst()
 
         when {
-            ops[i] == "*" -> {
-                lhs *= rhs
+            t.isDigit() -> {
+                when (op) {
+                    'a' -> acc += t.toString().toLong()
+                    'm' -> acc *= t.toString().toLong()
+                }
             }
-            ops[i] == "+" -> {
-                lhs += rhs
+            t == '+' -> op = 'a'
+            t == '*' -> op = 'm'
+            t == '(' -> {
+                var value = evaluate(tokens)
+                when (op) {
+                    'a' -> acc += value
+                    'm' -> acc *= value
+                }
             }
-            else -> {
-                rhs = ops[i].toInt()
-            }
+            t == ')' -> break
         }
-
     }
 
-    return lhs
+    return acc
+}
+
+fun advancedEvaluate(tokens: Tokens): Long {
+    var acc = 0L
+    var mul = 1L
+
+    while (tokens.isNotEmpty()) {
+        var t = tokens.removeFirst()
+
+        when {
+            t.isDigit() -> {
+                var value = t.toString().toLong() * mul
+                acc += value
+            }
+            t == '*' -> {
+                mul = acc
+                acc = 0L
+            }
+            t == '(' -> {
+                var value = advancedEvaluate(tokens) * mul
+                acc += value
+            }
+            t == ')' -> break
+        }
+    }
+
+    return acc
 }
