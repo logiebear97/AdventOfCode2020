@@ -2,177 +2,177 @@ package com.logan.adventofcode2020
 
 import java.io.File
 
-var pocketDimension = mutableMapOf<Int, MutableMap<Int, MutableMap<Int, MutableMap<Int, Boolean>>>>()
+typealias Coord = Triple<Int, Int, Int>
 
-val cycles = 1
+class Quad(val x: Int = 0, val y: Int = 0, val z: Int = 0, val w: Int = 0) {
+    override fun equals(other: Any?): Boolean {
+        if (this === other) return true
+        if (javaClass != other?.javaClass) return false
+
+        other as Quad
+
+        if (x != other.x) return false
+        if (y != other.y) return false
+        if (z != other.z) return false
+        if (w != other.w) return false
+
+        return true
+    }
+
+    override fun hashCode(): Int {
+        var result = x
+        result = 31 * result + y
+        result = 31 * result + z
+        result = 31 * result + w
+        return result
+    }
+}
+
+var grid = mutableMapOf<Int, MutableMap<Int, Char>>()
+var cube = mutableSetOf<Coord>()
+var hyperCube = mutableSetOf<Quad>()
+
+val cycles = 6
 
 fun main() {
-    val inputFileName = "input/day17_smallExample.txt"
+    val inputFileName = "input/day17_input.txt"
     readInitialStateFromFile(inputFileName)
-    printPocketDimension()
+    setupCube()
+    setupHyperCube()
 
-    simulateCycles(cycles)
-    println("Active: ${calculateActiveCubes()}")
+    for (i in 1..cycles) {
+        cycle()
+        cycle(true)
+    }
+
+    println("Active (Cube): ${cube.size}")
+    println("Active (Hyper): ${hyperCube.size}")
 }
 
 fun readInitialStateFromFile(name: String) {
     val lines = File(name).readLines()
 
-    pocketDimension[0] = mutableMapOf()
-    pocketDimension[0]!![0] = mutableMapOf()
-
     for (y in lines.indices) {
-        pocketDimension[0]!![0]!![y] = mutableMapOf()
+        grid[y] = mutableMapOf()
         for (x in lines[y].indices) {
-            when (lines[y][x]) {
-                '#' -> pocketDimension[0]!![0]!![y]!![x] = true
-                '.' -> pocketDimension[0]!![0]!![y]!![x] = false
-            }
+             grid[y]!![x] = lines[y][x]
         }
     }
 }
 
-fun copyPocketDimension(): MutableMap<Int, MutableMap<Int, MutableMap<Int, MutableMap<Int, Boolean>>>> {
-    expandPocketDimension()
+fun setupCube() {
+    for (x in grid) {
+        for (y in x.value) {
+            if (y.value == '#') cube.add(Coord(x.key, y.key, 0))
+        }
+    }
+}
 
-    var dimension = mutableMapOf<Int, MutableMap<Int, MutableMap<Int, MutableMap<Int, Boolean>>>>()
+fun setupHyperCube() {
+    for (x in grid) {
+        for (y in x.value) {
+            if (y.value == '#') hyperCube.add(Quad(x.key, y.key, 0, 0))
+        }
+    }
+}
 
-    for (w in pocketDimension.keys) {
-        dimension[w] = mutableMapOf()
-        for (z in pocketDimension[w]!!.keys) {
-            dimension[w]!![z] = mutableMapOf()
-            for (y in pocketDimension[w]!![z]!!.keys) {
-                dimension[w]!![z]!![y] = mutableMapOf()
-                for (x in pocketDimension[w]!![z]!![y]!!.keys) {
-                    dimension[w]!![z]!![y]!![x] = pocketDimension[w]!![z]!![y]!![x]!!
+fun neighbors(cell: Coord): MutableList<Coord> {
+    var neighbors = mutableListOf<Coord>()
+    for (x in cell.first-1..cell.first+1) {
+        for (y in cell.second-1..cell.second+1) {
+            for (z in cell.third-1..cell.third+1) {
+                neighbors.add(Coord(x, y, z))
+            }
+        }
+    }
+
+    return neighbors
+}
+
+fun neighbors(cell: Quad): MutableList<Quad> {
+    var neighbors = mutableListOf<Quad>()
+    for (x in cell.x-1..cell.x+1) {
+        for (y in cell.y-1..cell.y+1) {
+            for (z in cell.z-1..cell.z+1) {
+                for (w in cell.w - 1..cell.w + 1) {
+                    neighbors.add(Quad(x, y, z, w))
                 }
             }
         }
     }
 
-    return dimension
+    return neighbors
 }
 
-fun expandPocketDimension() {
-    val downW = pocketDimension.keys.minOrNull()!!-1
-    val upW = pocketDimension.keys.maxOrNull()!!+1
-    val downZ = pocketDimension[0]!!.keys.minOrNull()!!-1
-    val upZ = pocketDimension[0]!!.keys.maxOrNull()!!+1
-    val downY = pocketDimension[0]!![0]!!.keys.minOrNull()!!-1
-    val upY = pocketDimension[0]!![0]!!.keys.maxOrNull()!!+1
-    val downX = pocketDimension[0]!![0]!![0]!!.keys.minOrNull()!!-1
-    val upX = pocketDimension[0]!![0]!![0]!!.keys.maxOrNull()!!+1
-
-    for (w in downW..upW) {
-        if (pocketDimension[w] == null) {
-            pocketDimension[w] = mutableMapOf()
-        }
-        for (z in downZ..upZ) {
-            if (pocketDimension[w]!![z] == null) {
-                pocketDimension[w]!![z] = mutableMapOf()
-            }
-            for (y in downY..upY) {
-                if (pocketDimension[w]!![z]!![y] == null) {
-                    pocketDimension[w]!![z]!![y] = mutableMapOf()
-                }
-                for (x in downX..upX) {
-                    if (pocketDimension[w]!![z]!![y]!![x] == null) {
-                        pocketDimension[w]!![z]!![y]!![x] = false
-                    }
-                }
-            }
-        }
+fun aliveNeighbors(cell: Coord): Int {
+    var alive = 0
+    for (n in neighbors(cell)) {
+        if (cube.contains(n)) alive++
     }
+
+    if (cell in cube) alive--
+
+    return alive
 }
 
-fun simulateCycles(numCycles: Int) {
-    for (i in 1..numCycles) {
-        completeCycle()
-
-        println("Cycle $i")
-        printPocketDimension()
+fun aliveNeighbors(cell: Quad): Int {
+    var alive = 0
+    for (n in neighbors(cell)) {
+        if (hyperCube.contains(n)) alive++
     }
+
+    if (cell in hyperCube) alive--
+
+    return alive
 }
 
-fun completeCycle() {
-    var activeNeighbors = 0
-    var copyDimension = copyPocketDimension()
-    printPocketDimension()
-
-    println("----------------------")
-//    pocketDimension = copyDimension
-    printPocketDimension()
-
-    for (w in pocketDimension.keys) {
-        for (z in pocketDimension.keys) {
-            for (y in pocketDimension[z]!!.keys) {
-                for (x in pocketDimension[z]!![y]!!.keys) {
-                    activeNeighbors = 0
-
-                    for (wI in w-1..w+1) {
-                        for (zI in z-1..z+1) {
-                            for (yI in y-1..y+1) {
-                                for (xI in x-1..x+1) {
-                                    if (xI == x && yI == y && zI == z && wI == w) {
-                                        continue
-                                    }
-                                    if (pocketDimension[wI]?.get(zI)?.get(yI)?.get(xI) == true) activeNeighbors++
-                                }
-                            }
-                        }
-                    }
-
-                    when (pocketDimension[w]!![z]!![y]!![x]!!) {
-                        true -> {
-                            if (activeNeighbors != 2 || activeNeighbors != 3) {
-                                copyDimension[w]!![z]!![y]!![x] = false
-                            }
-                        }
-                        false -> {
-                            if (activeNeighbors == 3) {
-                                copyDimension[w]!![z]!![y]!![x] = true
-                            }
-                        }
-                    }
-
-                }
-            }
+fun allNeighbors(): MutableSet<Coord> {
+    var neighbors = mutableSetOf<Coord>()
+    for (cell in cube) {
+        for (n in neighbors(cell)) {
+            neighbors.add(n)
         }
     }
 
-    pocketDimension = copyDimension
+    return neighbors
 }
 
-fun calculateActiveCubes(): Int {
-    var active = 0
-
-    for (w in pocketDimension.keys) {
-        for (z in pocketDimension[w]!!.keys) {
-            for (y in pocketDimension[w]!![z]!!.keys) {
-                for (x in pocketDimension[w]!![z]!![y]!!.keys) {
-                    if (pocketDimension[w]!![z]!![y]!![x]!!) active++
-                }
-            }
+fun allHyperNeighbors(): MutableSet<Quad> {
+    var neighbors = mutableSetOf<Quad>()
+    for (cell in hyperCube) {
+        for (n in neighbors(cell)) {
+            neighbors.add(n)
         }
     }
 
-    return active
+    return neighbors
 }
 
-fun printPocketDimension() {
-    for (w in pocketDimension.keys) {
-        for (z in pocketDimension[w]!!.keys) {
-            println("w = $w, z = $z")
-            for (y in pocketDimension[w]!![z]!!.keys) {
-                for (x in pocketDimension[w]!![z]!![y]!!.keys) {
-                    when (pocketDimension[w]!![z]!![y]!![x]!!) {
-                        true -> print('#')
-                        false -> print('.')
-                    }
-                }
-                println()
+fun cycle(hyper: Boolean = false) {
+    if (hyper) {
+        var newCube = mutableSetOf<Quad>()
+
+        for (c in allHyperNeighbors()) {
+            var alive = aliveNeighbors(c)
+
+            if (alive == 3 || (alive == 2 && hyperCube.contains(c))) {
+                newCube.add(c)
             }
-            println()
         }
+
+        hyperCube = newCube
+
+    } else {
+        var newCube = mutableSetOf<Coord>()
+
+        for (c in allNeighbors()) {
+            var alive = aliveNeighbors(c)
+
+            if (alive == 3 || (alive == 2 && cube.contains(c))) {
+                newCube.add(c)
+            }
+        }
+
+        cube = newCube
     }
 }
